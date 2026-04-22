@@ -97,9 +97,9 @@ class LoginView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserViewSet(viewsets.ReadOnlyModelViewSet):
+class UserViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for reading user profiles.
+    ViewSet for reading and updating user profiles.
     
     GET /api/v1/users/ - List all users (paginated)
     GET /api/v1/users/{id}/ - Get user by ID
@@ -127,6 +127,24 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
             serializer = self.get_serializer(request.user)
             return Response({'user': serializer.data})
         return super().list(request, *args, **kwargs)
+        
+    def update(self, request, *args, **kwargs):
+        user = self.get_object()
+        if request.user != user and not request.user.is_staff:
+            return Response({"detail": "Not authorized to update this profile."}, status=status.HTTP_403_FORBIDDEN)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        user = self.get_object()
+        if request.user != user and not request.user.is_staff:
+            return Response({"detail": "Not authorized to update this profile."}, status=status.HTTP_403_FORBIDDEN)
+        return super().partial_update(request, *args, **kwargs)
+        
+    def create(self, request, *args, **kwargs):
+        return Response({"detail": "Use registration endpoint."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        
+    def destroy(self, request, *args, **kwargs):
+        return Response({"detail": "Not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 class TrustScoreView(APIView):

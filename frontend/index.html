@@ -127,6 +127,10 @@
                         <i class="fa-solid fa-user-group"></i>
                         <span>Groups</span>
                     </a>
+                    <a href="#" class="nav-item" data-target="profile">
+                        <i class="fa-solid fa-user"></i>
+                        <span>Profile</span>
+                    </a>
                 </div>
 
                 <div class="sidebar-footer">
@@ -315,6 +319,53 @@
                                     <!-- Populated by JS -->
                                 </div>
                             </div>
+                        </div>
+                    </section>
+
+                    <!-- Profile Section -->
+                    <section id="profile-section" class="content-section" style="display: none;">
+                        <div class="bento-card" style="max-width: 600px; margin: 0 auto;">
+                            <h3>Your Profile</h3>
+                            <p class="text-muted text-sm mb-4">Complete your profile to build trust in the community.</p>
+                            <form id="profile-form">
+                                <div class="form-row">
+                                    <div class="input-group">
+                                        <label>First Name</label>
+                                        <input type="text" id="prof-first-name">
+                                    </div>
+                                    <div class="input-group">
+                                        <label>Last Name</label>
+                                        <input type="text" id="prof-last-name">
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <label>Bio</label>
+                                    <textarea id="prof-bio" rows="3"></textarea>
+                                </div>
+                                <div class="form-row">
+                                    <div class="input-group">
+                                        <label>Age</label>
+                                        <input type="number" id="prof-age">
+                                    </div>
+                                    <div class="input-group">
+                                        <label>Location</label>
+                                        <input type="text" id="prof-location" placeholder="e.g. Dhaka, Bangladesh">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="input-group">
+                                        <label>Occupation</label>
+                                        <input type="text" id="prof-occupation" placeholder="e.g. Software Engineer">
+                                    </div>
+                                    <div class="input-group">
+                                        <label>University</label>
+                                        <input type="text" id="prof-university" placeholder="e.g. BRAC University (if student)">
+                                    </div>
+                                </div>
+                                <div class="modal-actions mt-4">
+                                    <button type="submit" class="btn primary-btn" id="profile-submit-btn">Save Profile</button>
+                                </div>
+                            </form>
                         </div>
                     </section>
                 </div>

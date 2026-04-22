@@ -45,6 +45,26 @@ class User(AbstractUser):
         blank=True,
         help_text="User's phone number"
     )
+    age = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="User's age"
+    )
+    location = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Where the user lives"
+    )
+    occupation = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="User's occupation"
+    )
+    university = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="University name if student"
+    )
     avatar_url = models.URLField(
         blank=True,
         help_text="URL to user's profile picture"

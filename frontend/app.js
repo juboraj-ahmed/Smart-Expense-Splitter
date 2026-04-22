@@ -180,6 +180,11 @@ function setupEventListeners() {
                 document.getElementById('page-title').innerText = 'Your Groups';
                 document.getElementById('page-subtitle').innerText = 'Manage your expense splits';
                 await loadGroups();
+            } else if (target === 'profile') {
+                switchSection('profile-section');
+                document.getElementById('page-title').innerText = 'Your Profile';
+                document.getElementById('page-subtitle').innerText = 'Manage your personal details';
+                await loadProfile();
             }
         });
     });
@@ -264,6 +269,7 @@ function setupModals() {
     document.getElementById('form-add-member').addEventListener('submit', handleAddMember);
     document.getElementById('form-add-expense').addEventListener('submit', handleAddExpense);
     document.getElementById('form-settle-up').addEventListener('submit', handleSettleUp);
+    document.getElementById('profile-form').addEventListener('submit', handleProfileUpdate);
 }
 
 function openModal(modalId) {
@@ -602,6 +608,54 @@ async function loadGroupDetail(groupId) {
 
     } catch (err) {
         showToast('Failed to load group details: ' + err.message, 'error');
+    }
+}
+
+async function loadProfile() {
+    try {
+        if (!currentUser) return;
+        const data = await apiCall(`/users/${currentUser.id}/`);
+        document.getElementById('prof-first-name').value = data.first_name || '';
+        document.getElementById('prof-last-name').value = data.last_name || '';
+        document.getElementById('prof-bio').value = data.bio || '';
+        document.getElementById('prof-age').value = data.age || '';
+        document.getElementById('prof-location').value = data.location || '';
+        document.getElementById('prof-occupation').value = data.occupation || '';
+        document.getElementById('prof-university').value = data.university || '';
+    } catch (err) {
+        showToast('Failed to load profile', 'error');
+    }
+}
+
+async function handleProfileUpdate(e) {
+    e.preventDefault();
+    if (!currentUser) return;
+    const btn = document.getElementById('profile-submit-btn');
+    const ogText = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+
+    const payload = {
+        first_name: document.getElementById('prof-first-name').value,
+        last_name: document.getElementById('prof-last-name').value,
+        bio: document.getElementById('prof-bio').value,
+        age: document.getElementById('prof-age').value ? parseInt(document.getElementById('prof-age').value) : null,
+        location: document.getElementById('prof-location').value,
+        occupation: document.getElementById('prof-occupation').value,
+        university: document.getElementById('prof-university').value,
+    };
+
+    try {
+        await apiCall(`/users/${currentUser.id}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+        });
+        showToast('Profile updated successfully!');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.innerHTML = ogText;
+        btn.disabled = false;
     }
 }
 

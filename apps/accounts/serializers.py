@@ -34,10 +34,23 @@ class UserSerializer(serializers.ModelSerializer):
             'trust_level',
             'bio',
             'phone',
+            'age',
+            'location',
+            'occupation',
+            'university',
             'avatar_url',
             'created_at',
         ]
         read_only_fields = ['id', 'trust_score', 'created_at']
+
+    def validate_username(self, value):
+        """Username must be unique (case-insensitive)."""
+        qs = User.objects.filter(username__iexact=value)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("This username is already taken by another user.")
+        return value
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -80,8 +93,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         """Username must be unique and 3+ characters."""
         if len(value) < 3:
             raise serializers.ValidationError("Username must be at least 3 characters.")
-        if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError("This username is already registered.")
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("This username is already taken by another user.")
         return value
     
     def validate_email(self, value):
