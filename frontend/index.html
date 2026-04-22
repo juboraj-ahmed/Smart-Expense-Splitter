@@ -4,121 +4,459 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Expense Splitter</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div id="toast-container"></div>
+
     <div id="app">
         <!-- Authentication View -->
         <main id="auth-view" class="view active">
-            <div class="auth-card glass-panel">
-                <div class="logo-area">
-                    <div class="logo-icon">💵</div>
-                    <h2>Smart Splitter</h2>
-                    <p>Financial clarity. Better trust.</p>
+            <div class="auth-wrapper">
+                <div class="auth-visual">
+                    <div class="visual-content">
+                        <h1>Financial Clarity.</h1>
+                        <h1>Better Trust.</h1>
+                        <p>Split expenses seamlessly with your friends, roommates, or colleagues. Maintain a perfect trust score and never argue about money again.</p>
+                        <div class="glass-card mockup-card">
+                            <div class="mockup-header">
+                                <i class="fa-solid fa-receipt"></i>
+                                <span>Recent Split</span>
+                            </div>
+                            <div class="mockup-body">
+                                <h3>Dinner at Luigi's</h3>
+                                <div class="amount">$120.00</div>
+                                <div class="split-avatars">
+                                    <div class="avatar" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">A</div>
+                                    <div class="avatar" style="background: linear-gradient(135deg, #ec4899, #f43f5e);">B</div>
+                                    <div class="avatar" style="background: linear-gradient(135deg, #10b981, #3b82f6);">C</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-blobs">
+                        <div class="blob blob-1"></div>
+                        <div class="blob blob-2"></div>
+                    </div>
                 </div>
                 
-                <form id="login-form">
-                    <div class="input-group">
-                        <label for="username">Email</label>
-                        <input type="email" id="username" placeholder="alice@example.com" required autocomplete="email">
-                    </div>
-                    <div class="input-group">
-                        <label for="password">Password</label>
-                        <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
-                    </div>
-                    <button type="submit" class="btn primary-btn">Sign In</button>
-                    <p class="auth-switch">Don't have an account? <a href="#" id="show-register">Register here</a></p>
-                </form>
+                <div class="auth-form-container">
+                    <div class="auth-card">
+                        <div class="logo-area">
+                            <div class="logo-icon"><i class="fa-solid fa-wallet"></i></div>
+                            <h2>Smart Splitter</h2>
+                            <p id="auth-subtitle">Welcome back! Please enter your details.</p>
+                        </div>
+                        
+                        <form id="login-form">
+                            <div class="input-group">
+                                <label for="username">Email</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-regular fa-envelope"></i>
+                                    <input type="email" id="username" placeholder="Enter your email" required autocomplete="email">
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="password">Password</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-solid fa-lock"></i>
+                                    <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn primary-btn" id="login-submit-btn">
+                                <span>Sign In</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                            <p class="auth-switch">Don't have an account? <a href="#" id="show-register">Sign up</a></p>
+                        </form>
 
-                <form id="register-form" style="display: none;">
-                    <div class="input-group">
-                        <label for="reg-username">Username</label>
-                        <input type="text" id="reg-username" required>
+                        <form id="register-form" style="display: none;">
+                            <div class="input-group">
+                                <label for="reg-username">Username</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-regular fa-user"></i>
+                                    <input type="text" id="reg-username" placeholder="Choose a username" required>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="reg-email">Email</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-regular fa-envelope"></i>
+                                    <input type="email" id="reg-email" placeholder="Enter your email" required>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="reg-password">Password</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-solid fa-lock"></i>
+                                    <input type="password" id="reg-password" placeholder="••••••••" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn primary-btn" id="register-submit-btn">
+                                <span>Create Account</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                            <p class="auth-switch">Already have an account? <a href="#" id="show-login">Log in</a></p>
+                        </form>
                     </div>
-                    <div class="input-group">
-                        <label for="reg-email">Email</label>
-                        <input type="email" id="reg-email" required>
-                    </div>
-                    <div class="input-group">
-                        <label for="reg-password">Password</label>
-                        <input type="password" id="reg-password" required>
-                    </div>
-                    <button type="submit" class="btn primary-btn">Create Account</button>
-                    <p class="auth-switch">Already have an account? <a href="#" id="show-login">Sign in</a></p>
-                </form>
+                </div>
             </div>
         </main>
 
-        <!-- Main Dashboard View -->
-        <main id="dashboard-view" class="view" style="display: none;">
-            <nav class="sidebar glass-panel">
-                <div class="logo-area-small">
-                    <div class="logo-icon-small">💵</div>
+        <!-- Main App Layout -->
+        <main id="app-layout" class="view" style="display: none;">
+            <nav class="sidebar">
+                <div class="sidebar-header">
+                    <div class="logo-icon"><i class="fa-solid fa-wallet"></i></div>
                     <h3>Smart Splitter</h3>
                 </div>
-                <div class="nav-links">
-                    <a href="#" class="active" data-target="dashboard">Dashboard</a>
-                    <a href="#" data-target="groups">Groups</a>
-                    <a href="#" id="logout-btn">Logout</a>
+                
+                <div class="nav-menu">
+                    <p class="nav-label">MENU</p>
+                    <a href="#" class="nav-item active" data-target="dashboard">
+                        <i class="fa-solid fa-chart-pie"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="#" class="nav-item" data-target="groups">
+                        <i class="fa-solid fa-user-group"></i>
+                        <span>Groups</span>
+                    </a>
+                </div>
+
+                <div class="sidebar-footer">
+                    <div class="user-profile-mini">
+                        <div class="avatar" id="sidebar-avatar">U</div>
+                        <div class="user-info">
+                            <span id="sidebar-username">User</span>
+                            <span class="user-role">Member</span>
+                        </div>
+                    </div>
+                    <a href="#" id="logout-btn" class="logout-link">
+                        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    </a>
                 </div>
             </nav>
 
             <div class="main-content">
-                <header class="top-header glass-panel">
-                    <h1>Welcome, <span id="user-display-name">User</span></h1>
-                    <div class="trust-badge" title="Your Financial Trust Score">
-                        Trust Score: <span id="trust-score-val" class="score-val">100</span>
+                <header class="topbar">
+                    <div class="topbar-left">
+                        <h1 id="page-title">Overview</h1>
+                        <p id="page-subtitle" class="text-muted">Welcome back, here's your summary.</p>
                     </div>
-                </header>
-
-                <div class="dashboard-grid">
-                    <!-- Balances Summary -->
-                    <section class="card glass-panel balances-card">
-                        <h3>Your Balances</h3>
-                        <div class="balance-summary">
-                            <div class="balance-item positive">
-                                <span>You are owed</span>
-                                <h2 id="total-owed-to-you">$0.00</h2>
-                            </div>
-                            <div class="balance-item negative">
-                                <span>You owe</span>
-                                <h2 id="total-you-owe">$0.00</h2>
-                            </div>
+                    <div class="topbar-right">
+                        <!-- Currency Selector -->
+                        <div class="currency-selector">
+                            <select id="currency-select" class="currency-dropdown">
+                                <option value="USD">USD ($)</option>
+                                <option value="BDT">BDT (৳)</option>
+                            </select>
                         </div>
-                    </section>
-
-                    <!-- Trust Score Detail -->
-                    <section class="card glass-panel trust-card">
-                        <h3>Trust Analytics</h3>
-                        <div class="trust-meter-container">
-                            <div class="circle-wrap">
-                                <div class="circle">
-                                  <div class="mask full">
-                                    <div class="fill"></div>
-                                  </div>
-                                  <div class="mask half">
-                                    <div class="fill"></div>
-                                  </div>
-                                  <div class="inside-circle" id="trust-indicator"> 100 </div>
+                        
+                        <!-- Notifications -->
+                        <div class="notifications-wrapper">
+                            <button class="btn-icon" id="notification-btn">
+                                <i class="fa-regular fa-bell"></i>
+                                <span class="notification-badge" id="notification-badge">0</span>
+                            </button>
+                            <div class="notifications-dropdown" id="notifications-dropdown">
+                                <div class="notifications-header">
+                                    <h3>Notifications</h3>
+                                    <button class="btn-text" id="mark-all-read">Mark all as read</button>
+                                </div>
+                                <div class="notifications-list" id="notifications-list">
+                                    <!-- Populated by JS -->
+                                    <p class="text-muted text-center text-sm py-3">No new notifications</p>
                                 </div>
                             </div>
                         </div>
-                        <p class="trust-status text-center">Excellent Standing</p>
-                    </section>
-                </div>
 
-                <div class="recent-activity card glass-panel">
-                    <div class="card-header">
-                        <h3>Recent Expenses</h3>
-                        <button class="btn secondary-btn" id="new-expense-btn">+ Add Expense</button>
+                        <div class="trust-badge" title="Your Financial Trust Score">
+                            <div class="trust-icon"><i class="fa-solid fa-shield-halved"></i></div>
+                            <div class="trust-info">
+                                <span class="trust-label">Trust Score</span>
+                                <span id="topbar-trust-score" class="trust-val">100</span>
+                            </div>
+                        </div>
                     </div>
-                    <ul id="expenses-list" class="item-list">
-                        <li class="empty-state">No recent activity. Create a group to start splitting!</li>
-                    </ul>
+                </header>
+
+                <div class="scroll-area">
+                    <!-- Dashboard Section -->
+                    <section id="dashboard-section" class="content-section active">
+                        <div class="bento-grid">
+                            <!-- Balances Summary -->
+                            <div class="bento-card balances-card">
+                                <h3>Financial Overview</h3>
+                                <div class="balance-stats">
+                                    <div class="stat-box positive">
+                                        <div class="stat-icon"><i class="fa-solid fa-arrow-trend-up"></i></div>
+                                        <div class="stat-details">
+                                            <span>You are owed</span>
+                                            <h2 id="total-owed-to-you">$0.00</h2>
+                                        </div>
+                                    </div>
+                                    <div class="stat-box negative">
+                                        <div class="stat-icon"><i class="fa-solid fa-arrow-trend-down"></i></div>
+                                        <div class="stat-details">
+                                            <span>You owe</span>
+                                            <h2 id="total-you-owe">$0.00</h2>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Trust Score Detail -->
+                            <div class="bento-card trust-card">
+                                <h3>Trust Analytics</h3>
+                                <div class="trust-display">
+                                    <div class="circular-progress" id="trust-progress">
+                                        <div class="inner-circle">
+                                            <span id="trust-score-val">100</span>
+                                        </div>
+                                        <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="160px" height="160px">
+                                            <defs>
+                                               <linearGradient id="GradientColor">
+                                                  <stop offset="0%" stop-color="#10b981" />
+                                                  <stop offset="100%" stop-color="#3b82f6" />
+                                               </linearGradient>
+                                            </defs>
+                                            <circle cx="80" cy="80" r="70" stroke-linecap="round" id="trust-circle" />
+                                         </svg>
+                                    </div>
+                                    <div class="trust-status-container">
+                                        <span class="trust-status text-gradient">Excellent Standing</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Groups Summary -->
+                            <div class="bento-card groups-summary-card">
+                                <div class="card-header">
+                                    <h3>Your Groups</h3>
+                                    <button class="btn-icon" id="dashboard-add-group" title="Create Group"><i class="fa-solid fa-plus"></i></button>
+                                </div>
+                                <div id="dashboard-groups-list" class="list-container">
+                                    <!-- Populated by JS -->
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-ghost"></i>
+                                        <p>No groups yet.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Groups Section -->
+                    <section id="groups-section" class="content-section" style="display: none;">
+                        <div class="section-actions">
+                            <div class="search-bar">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="text" id="group-search" placeholder="Search groups...">
+                            </div>
+                            <button class="btn primary-btn" id="new-group-btn">
+                                <i class="fa-solid fa-plus"></i> Create Group
+                            </button>
+                        </div>
+                        
+                        <div id="groups-grid" class="groups-grid">
+                            <!-- Populated by JS -->
+                            <div class="empty-state full-width">
+                                <div class="empty-icon"><i class="fa-solid fa-users-slash"></i></div>
+                                <h3>No groups found</h3>
+                                <p>Create a group to start splitting expenses.</p>
+                                <button class="btn secondary-btn mt-3" id="empty-create-group-btn">Create Group</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Group Detail Section -->
+                    <section id="group-detail-section" class="content-section" style="display: none;">
+                        <button class="btn-back" id="back-to-groups">
+                            <i class="fa-solid fa-arrow-left"></i> Back to Groups
+                        </button>
+                        
+                        <div class="group-header">
+                            <div class="group-title-area">
+                                <div class="group-avatar" id="detail-group-avatar">G</div>
+                                <div>
+                                    <h2 id="detail-group-name">Group Name</h2>
+                                    <p id="detail-group-desc" class="text-muted">Group description</p>
+                                </div>
+                            </div>
+                            <div class="group-actions">
+                                <button class="btn secondary-btn" id="add-member-btn">
+                                    <i class="fa-solid fa-user-plus"></i> Add Member
+                                </button>
+                                <button class="btn primary-btn" id="add-expense-btn">
+                                    <i class="fa-solid fa-receipt"></i> Add Expense
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="detail-grid">
+                            <!-- Members & Balances -->
+                            <div class="bento-card">
+                                <h3>Group Balances</h3>
+                                <div id="group-balances-list" class="balances-list">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                            
+                            <!-- Recent Expenses -->
+                            <div class="bento-card col-span-2">
+                                <h3>Recent Expenses</h3>
+                                <div id="group-expenses-list" class="expenses-list">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Modals -->
+    <!-- Create Group Modal -->
+    <div id="modal-create-group" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Create New Group</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-create-group">
+                    <div class="input-group">
+                        <label>Group Name</label>
+                        <input type="text" id="new-group-name" placeholder="e.g. Summer Trip 2025" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Description</label>
+                        <input type="text" id="new-group-desc" placeholder="Optional description">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary-btn close-modal-btn">Cancel</button>
+                        <button type="submit" class="btn primary-btn">Create Group</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Member Modal -->
+    <div id="modal-add-member" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Add Member</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-add-member">
+                    <p class="text-muted mb-4">Enter the User ID of the person you want to add. (In a real app this would be a search by email/username).</p>
+                    <div class="input-group">
+                        <label>User ID</label>
+                        <input type="number" id="new-member-id" placeholder="e.g. 2" required>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary-btn close-modal-btn">Cancel</button>
+                        <button type="submit" class="btn primary-btn">Add Member</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Expense Modal -->
+    <div id="modal-add-expense" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Add Expense</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-add-expense">
+                    <div class="input-group">
+                        <label>Description</label>
+                        <input type="text" id="expense-desc" placeholder="e.g. Dinner" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="input-group">
+                            <label id="expense-amount-label">Amount</label>
+                            <input type="number" id="expense-amount" step="0.01" min="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Category</label>
+                            <select id="expense-category">
+                                <option value="food">Food</option>
+                                <option value="accommodation">Accommodation</option>
+                                <option value="transportation">Transportation</option>
+                                <option value="entertainment">Entertainment</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="split-options">
+                        <label>Split Method</label>
+                        <div class="split-tabs">
+                            <button type="button" class="split-tab active" data-method="equal">Split Equally</button>
+                            <button type="button" class="split-tab" data-method="custom">Custom Split</button>
+                        </div>
+                    </div>
+                    
+                    <div id="custom-split-area" style="display: none; margin-top: 15px;">
+                        <label class="text-sm">Members to split with (leave amounts blank for now, equal split logic is preferred for simplicity here, or we auto-calculate).</label>
+                        <!-- For simplicity in this demo, we'll mainly use Equal Split endpoint -->
+                        <p class="text-warning text-sm mt-2">Custom splits require exact amounts adding up to the total.</p>
+                    </div>
+
+                    <div id="equal-split-area" style="margin-top: 15px;">
+                        <label class="text-sm">Select members involved:</label>
+                        <div id="expense-members-checkboxes" class="members-checkbox-list">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <div class="modal-actions mt-4">
+                        <button type="button" class="btn secondary-btn close-modal-btn">Cancel</button>
+                        <button type="submit" class="btn primary-btn">Save Expense</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settle Up Modal -->
+    <div id="modal-settle-up" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Settle Up</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-settle-up">
+                    <p class="mb-3">Record a payment to <strong id="settle-target-name">Someone</strong></p>
+                    <input type="hidden" id="settle-target-id">
+                    <div class="input-group">
+                        <label id="settle-amount-label">Amount</label>
+                        <input type="number" id="settle-amount" step="0.01" min="0.01" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Description (Optional)</label>
+                        <input type="text" id="settle-desc" placeholder="e.g. Venmo payment">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary-btn close-modal-btn">Cancel</button>
+                        <button type="submit" class="btn primary-btn">Record Payment</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

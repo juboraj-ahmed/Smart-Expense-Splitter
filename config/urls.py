@@ -52,6 +52,7 @@ urlpatterns = [
         # Settlements/Payments
         path('settlements/', expense_views.SettlementViewSet.as_view({'post': 'create', 'get': 'list'}), name='settlement-list'),
         path('settlements/<int:pk>/', expense_views.SettlementViewSet.as_view({'get': 'retrieve'}), name='settlement-detail'),
+        path('settlements/<int:pk>/confirm/', expense_views.SettlementViewSet.as_view({'post': 'confirm'}), name='settlement-confirm'),
         
         # Trust Score
         path('users/<int:user_id>/trust-score/', account_views.TrustScoreView.as_view(), name='trust-score'),

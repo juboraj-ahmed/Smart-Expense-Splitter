@@ -145,18 +145,20 @@ class SettlementService:
         
         # Total amounts received from others
         payments_received = Payment.objects.filter(
+            status='accepted',
             to_user=user,
             group=group
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
         # Total amounts paid to others (settlement)
         payments_made = Payment.objects.filter(
+            status='accepted',
             from_user=user,
             group=group
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
         # Net balance
-        balance = total_paid - total_owes - payments_made + payments_received
+        balance = total_paid - total_owes + payments_made - payments_received
         return balance
     
     @staticmethod
@@ -183,19 +185,21 @@ class SettlementService:
         
         # Settlements between them
         u1_paid_u2 = Payment.objects.filter(
+            status='accepted',
             from_user=user1,
             to_user=user2,
             group=group
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
         u2_paid_u1 = Payment.objects.filter(
+            status='accepted',
             from_user=user2,
             to_user=user1,
             group=group
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
         # Net: user2 owes user1
-        net = (u1_paid_u2_benefited - u2_paid_u1_benefited) - u1_paid_u2 + u2_paid_u1
+        net = (u1_paid_u2_benefited - u2_paid_u1_benefited) + u1_paid_u2 - u2_paid_u1
         return net
     
     @staticmethod
@@ -226,11 +230,18 @@ class SettlementService:
             from_user, to_user, group
         )
         
+        # Check pending payments
+        pending_amount = Payment.objects.filter(
+            from_user=from_user, to_user=to_user, group=group, status='pending'
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
         # Validate amount (user1 owes user2 if negative)
         if actual_balance < 0:  # from_user owes to_user
-            if amount > abs(actual_balance):
+            max_can_settle = abs(actual_balance) - pending_amount
+            if amount > max_can_settle:
                 raise ValidationError(
-                    f"{from_user.username} only owes {abs(actual_balance)} "
+                    f"{from_user.username} owes {abs(actual_balance)} "
+                    f"(with {pending_amount} pending) "
                     f"to {to_user.username}, cannot settle {amount}"
                 )
         else:  # from_user doesn't owe to_user (or they don't owe anything)
@@ -268,17 +279,8 @@ class SettlementService:
         for membership in members:
             user = membership.user
             
-            # Total they paid
-            total_paid = Expense.objects.filter(
-                group=group,
-                paid_by=user
-            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-            
-            # Total they owe
-            total_owes = Split.objects.filter(
-                user=user,
-                expense__group=group
-            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            # Calculate comprehensive net balance including settlements
+            net_balance = SettlementService.calculate_user_balance(user, group)
             
             balances.append({
                 'user': {
@@ -287,9 +289,9 @@ class SettlementService:
                     'email': user.email,
                     'trust_score': user.trust_score,
                 },
-                'total_paid': total_paid,
-                'total_owes': total_owes,
-                'net_balance': total_paid - total_owes,
+                'total_paid': Decimal('0.00'),  # Omitted for performance, frontend uses net_balance
+                'total_owes': Decimal('0.00'),
+                'net_balance': net_balance,
             })
         
         return balances
@@ -339,20 +341,27 @@ class TrustScoreService:
         total_payments = on_time + late
         avg_days_late = days_late_total / late if late > 0 else 0
         
-        # Total amount pending (unpaid splits)
-        pending_amount = Split.objects.filter(user=user).exclude(
-            expense__payments__to_user=user
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        # Since payments are not linked to specific expenses, 
+        # pending amount is the sum of the user's net negative balances across all groups.
+        groups = Group.objects.filter(memberships__user=user)
+        pending_amount = Decimal('0.00')
+        for group in groups:
+            bal = SettlementService.calculate_user_balance(user, group)
+            if bal < 0:
+                pending_amount += abs(bal)
         
-        # How long has longest overdue been pending
+        # How long has longest overdue been pending?
+        # We find the oldest split in any group where the user owes money
+        # Simplified: just find the oldest split
         oldest_pending = Split.objects.filter(
             user=user,
             expense__created_at__lt=timezone.now() - timedelta(days=7)
-        ).exclude(
-            expense__payments__to_user=user
         ).order_by('expense__created_at').first()
         
-        pending_days = (timezone.now() - oldest_pending.expense.created_at).days if oldest_pending else 0
+        # Check if the user actually owes money overall
+        pending_days = 0
+        if pending_amount > 0 and oldest_pending:
+            pending_days = (timezone.now() - oldest_pending.expense.created_at).days
         
         return {
             'total_payments': total_payments,

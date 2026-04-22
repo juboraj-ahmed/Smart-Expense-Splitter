@@ -233,6 +233,8 @@ class PaymentSerializer(serializers.ModelSerializer):
     from_user = UserSerializer(read_only=True)
     to_user = UserSerializer(read_only=True)
     to_user_id = serializers.IntegerField(write_only=True, required=False)
+    group_id = serializers.IntegerField(write_only=True)
+    group = serializers.PrimaryKeyRelatedField(read_only=True)
     
     class Meta:
         model = Payment
@@ -242,11 +244,13 @@ class PaymentSerializer(serializers.ModelSerializer):
             'to_user',
             'to_user_id',
             'group',
+            'group_id',
             'amount',
             'description',
+            'status',
             'created_at',
         ]
-        read_only_fields = ['id', 'from_user', 'created_at']
+        read_only_fields = ['id', 'from_user', 'group', 'status', 'created_at']
     
     def validate_amount(self, value):
         if value <= 0:

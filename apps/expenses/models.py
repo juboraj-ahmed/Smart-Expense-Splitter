@@ -171,7 +171,14 @@ class Payment(models.Model):
       to_user: Bob
       amount: $75
       group: Summer Trip
+      status: pending -> accepted
     """
+    
+    STATUS_CHOICES = (
+        ('pending', 'Pending Confirmation'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+    )
     
     from_user = models.ForeignKey(
         User,
@@ -198,6 +205,12 @@ class Payment(models.Model):
         max_length=500,
         blank=True,
         help_text="Payment description (e.g., 'Settled for split dinner')"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        help_text="Settlement confirmation status"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     

@@ -6,6 +6,7 @@ Handles expense creation, splits, settlements, and balance calculations.
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, viewsets, permissions
+from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db.models import Sum
@@ -208,7 +209,7 @@ class SettlementViewSet(viewsets.ModelViewSet):
         serializer = PaymentSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         
-        group_id = serializer.validated_data.get('group')
+        group_id = serializer.validated_data.get('group_id')
         to_user_id = serializer.validated_data.get('to_user_id')
         amount = serializer.validated_data.get('amount')
         description = serializer.validated_data.get('description', '')
@@ -233,6 +234,25 @@ class SettlementViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response(
                 {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+    @action(detail=True, methods=['post'])
+    def confirm(self, request, pk=None):
+        try:
+            payment = self.get_object()
+            if payment.to_user != request.user:
+                return Response(
+                    {"error": "Only the recipient can confirm the payment."}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            payment.status = 'accepted'
+            payment.save()
+            return Response({"status": "Payment confirmed", "id": payment.id})
+        except Exception as e:
+            return Response(
+                {"error": str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
