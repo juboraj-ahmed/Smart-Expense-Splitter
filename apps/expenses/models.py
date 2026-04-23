@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from decimal import Decimal
+import uuid
 
 User = get_user_model()
 
@@ -44,6 +45,7 @@ class Expense(models.Model):
         on_delete=models.CASCADE,
         related_name='expenses'
     )
+    transaction_id = models.UUIDField(default=uuid.uuid4, editable=False)
     paid_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -175,11 +177,12 @@ class Payment(models.Model):
     """
     
     STATUS_CHOICES = (
-        ('pending', 'Pending Confirmation'),
-        ('accepted', 'Accepted'),
-        ('rejected', 'Rejected'),
+        ('PENDING', 'Pending'),
+        ('COMPLETED', 'Completed'),
+        ('FAILED', 'Failed'),
     )
     
+    transaction_id = models.UUIDField(default=uuid.uuid4, editable=False)
     from_user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -209,10 +212,11 @@ class Payment(models.Model):
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='pending',
+        default='PENDING',
         help_text="Settlement confirmation status"
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'payment'
@@ -237,3 +241,16 @@ class Payment(models.Model):
         """Run full_clean() before saving."""
         self.full_clean()
         super().save(*args, **kwargs)
+
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    message = models.CharField(max_length=500)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'notification'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"To {self.user.username}: {self.message}"

@@ -1,12 +1,6 @@
 """
 Service layer for expenses app.
 Contains business logic for expense splitting, settlement, and trust score calculation.
-
-Design Principles:
-1. Services encapsulate complex logic (not in views or models)
-2. Services are stateless and reusable
-3. Services handle transactions and data consistency
-4. Services raise exceptions for validation errors
 """
 
 from django.db import transaction
@@ -15,11 +9,19 @@ from django.utils import timezone
 from django.db.models import Sum, Q, F
 from decimal import Decimal
 from datetime import timedelta
-from apps.expenses.models import Expense, Split, Payment
+import math
+from apps.expenses.models import Expense, Split, Payment, Notification
 from apps.groups.models import Group, Membership
 from apps.accounts.models import User, TrustScoreAudit
 from django.conf import settings
 
+class NotificationService:
+    """
+    Service for generating lightweight notifications.
+    """
+    @staticmethod
+    def create_notification(user_id, message):
+        Notification.objects.create(user_id=user_id, message=message)
 
 class ExpenseService:
     """
@@ -27,34 +29,19 @@ class ExpenseService:
     """
     
     @staticmethod
-    @transaction.atomic  # Atomic: all splits create together or none
+    @transaction.atomic
     def create_expense_with_splits(group_id, paid_by, amount, description, 
                                    category, splits_data):
-        """
-        Create expense with multiple splits atomically.
+        amount = Decimal(str(amount))
         
-        Args:
-            group_id: ID of group
-            paid_by: User paying
-            amount: Total amount
-            description: Expense description
-            category: Expense category
-            splits_data: List of {'user_id': X, 'amount': Y}
-        
-        Returns:
-            Expense instance
-        
-        Raises:
-            ValidationError: If splits don't sum to amount or users not members
-        """
-        # Validate splits sum
+        # FRAUD PREVENTION: Limits and invalid states
+        if amount <= 0 or amount > Decimal('100000'):
+            raise ValidationError("Expense amount must be between 0.01 and 100,000")
+            
         total_split = sum(Decimal(str(s['amount'])) for s in splits_data)
-        if total_split != amount:
-            raise ValidationError(
-                f"Splits total ({total_split}) must equal amount ({amount})"
-            )
+        if abs(total_split - amount) > Decimal('0.01'):
+            raise ValidationError(f"Splits total ({total_split}) must equal amount ({amount})")
         
-        # Create expense
         expense = Expense.objects.create(
             group_id=group_id,
             paid_by=paid_by,
@@ -63,35 +50,40 @@ class ExpenseService:
             category=category,
         )
         
-        # Create splits atomically
         for split_data in splits_data:
+            split_amt = Decimal(str(split_data['amount']))
+            if split_amt < 0:
+                raise ValidationError("Split amounts cannot be negative")
+                
             Split.objects.create(
                 expense=expense,
                 user_id=split_data['user_id'],
-                amount=split_data['amount']
+                amount=split_amt
             )
+            
+            # NOTIFICATION: New Expense
+            if split_data['user_id'] != paid_by.id and split_amt > 0:
+                NotificationService.create_notification(
+                    split_data['user_id'], 
+                    f"{paid_by.username} added expense '{description}'. You owe ${split_amt}"
+                )
         
         return expense
     
     @staticmethod
     def create_equal_splits(group_id, paid_by, amount, description, 
                            category, participant_ids):
-        """
-        Create equal splits for a group of participants.
-        
-        Handles rounding issues by allocating remainder to last participant.
-        """
         num_participants = len(participant_ids)
         if num_participants == 0:
             raise ValidationError("At least one participant required")
         
+        amount = Decimal(str(amount))
         per_person = amount / num_participants
         per_person = per_person.quantize(Decimal('0.01'))
         
         splits_data = []
         for i, user_id in enumerate(participant_ids):
             if i == num_participants - 1:
-                # Last person gets remainder (handles rounding)
                 final_amount = amount - (per_person * (num_participants - 1))
             else:
                 final_amount = per_person
@@ -102,364 +94,232 @@ class ExpenseService:
             })
         
         return ExpenseService.create_expense_with_splits(
-            group_id=group_id,
-            paid_by=paid_by,
-            amount=amount,
-            description=description,
-            category=category,
-            splits_data=splits_data
+            group_id=group_id, paid_by=paid_by, amount=amount,
+            description=description, category=category, splits_data=splits_data
         )
 
 
 class SettlementService:
     """
-    Service for managing settlements and balance calculations.
-    
-    Key concepts:
-    - Balance = what user paid - what user owes + what they received
-    - We calculate on-demand from transactions (no stored balance field)
+    Service for managing settlements, balance calculations, and debt simplification.
     """
     
     @staticmethod
-    def calculate_user_balance(user, group):
+    def simplify_debts(balances_dict):
         """
-        Calculate net balance for user in group.
+        ALGORITHM: Debt Simplification (Min-Cash Flow)
+        Instead of A owing B and B owing C, simplifying reduces transactions so A pays C directly.
         
+        Args:
+            balances_dict: dict of {user_id: net_balance}
         Returns:
-            Decimal: Positive = owed to user, Negative = user owes
-        
-        Formula:
-        balance = (total_paid - total_split - payments_received + payments_made_to)
+            list of dicts: [{'from_user': id, 'to_user': id, 'amount': Decimal}]
         """
-        # Total amount user paid
-        total_paid = Expense.objects.filter(
-            group=group,
-            paid_by=user
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        debtors = []
+        creditors = []
         
-        # Total amount in splits (what user owes)
-        total_owes = Split.objects.filter(
-            user=user,
-            expense__group=group
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        # Partition into debtors and creditors
+        for user_id, balance in balances_dict.items():
+            if balance < -Decimal('0.01'):
+                debtors.append({'user_id': user_id, 'amount': abs(balance)})
+            elif balance > Decimal('0.01'):
+                creditors.append({'user_id': user_id, 'amount': balance})
+                
+        # Sort descending (greedy matching)
+        debtors.sort(key=lambda x: x['amount'], reverse=True)
+        creditors.sort(key=lambda x: x['amount'], reverse=True)
         
-        # Total amounts received from others
-        payments_received = Payment.objects.filter(
-            status='accepted',
-            to_user=user,
-            group=group
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        transactions = []
+        i, j = 0, 0
         
-        # Total amounts paid to others (settlement)
-        payments_made = Payment.objects.filter(
-            status='accepted',
-            from_user=user,
-            group=group
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        while i < len(debtors) and j < len(creditors):
+            debtor = debtors[i]
+            creditor = creditors[j]
+            
+            settle_amount = min(debtor['amount'], creditor['amount'])
+            
+            transactions.append({
+                'from_user': debtor['user_id'],
+                'to_user': creditor['user_id'],
+                'amount': settle_amount.quantize(Decimal('0.01'))
+            })
+            
+            debtor['amount'] -= settle_amount
+            creditor['amount'] -= settle_amount
+            
+            if debtor['amount'] < Decimal('0.01'):
+                i += 1
+            if creditor['amount'] < Decimal('0.01'):
+                j += 1
+                
+        return transactions
+
+    @staticmethod
+    def calculate_user_balance(user, group):
+        total_paid = Expense.objects.filter(group=group, paid_by=user).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        total_owes = Split.objects.filter(user=user, expense__group=group).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        payments_received = Payment.objects.filter(status='COMPLETED', to_user=user, group=group).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        payments_made = Payment.objects.filter(status='COMPLETED', from_user=user, group=group).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
-        # Net balance
         balance = total_paid - total_owes + payments_made - payments_received
         return balance
     
     @staticmethod
     def calculate_balance_between_users(user1, user2, group):
-        """
-        Calculate balance between two specific users.
+        u1_paid_u2_benefited = Split.objects.filter(user=user2, expense__paid_by=user1, expense__group=group).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        u2_paid_u1_benefited = Split.objects.filter(user=user1, expense__paid_by=user2, expense__group=group).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
-        Returns:
-            Decimal: Positive = user2 owes user1, Negative = user1 owes user2
-        """
-        # What user1 paid that user2 had to split
-        u1_paid_u2_benefited = Split.objects.filter(
-            user=user2,
-            expense__paid_by=user1,
-            expense__group=group
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        u1_paid_u2 = Payment.objects.filter(status='COMPLETED', from_user=user1, to_user=user2, group=group).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        u2_paid_u1 = Payment.objects.filter(status='COMPLETED', from_user=user2, to_user=user1, group=group).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
-        # What user2 paid that user1 had to split
-        u2_paid_u1_benefited = Split.objects.filter(
-            user=user1,
-            expense__paid_by=user2,
-            expense__group=group
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        # Settlements between them
-        u1_paid_u2 = Payment.objects.filter(
-            status='accepted',
-            from_user=user1,
-            to_user=user2,
-            group=group
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        u2_paid_u1 = Payment.objects.filter(
-            status='accepted',
-            from_user=user2,
-            to_user=user1,
-            group=group
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        # Net: user2 owes user1
         net = (u1_paid_u2_benefited - u2_paid_u1_benefited) + u1_paid_u2 - u2_paid_u1
         return net
     
     @staticmethod
     @transaction.atomic
     def record_settlement(from_user, to_user, group, amount, description=''):
-        """
-        Record settlement payment between users.
+        amount = Decimal(str(amount))
         
-        Validates:
-        - Amounts don't exceed actual balance owed
-        - User isn't paying themselves
-        - Both users are in group
-        
-        Updates trust scores after recording.
-        """
-        # Validate users
+        # FRAUD PREVENTION: Invalid amounts
+        if amount <= 0 or amount > Decimal('100000'):
+            raise ValidationError("Payment amount must be valid and within limits")
+            
         if from_user.id == to_user.id:
             raise ValidationError("Cannot settle payment with yourself")
-        
-        # Verify both are members of group
+            
         if not Membership.objects.filter(group=group, user=from_user).exists():
-            raise ValidationError(f"{from_user.username} is not a member of {group.name}")
-        if not Membership.objects.filter(group=group, user=to_user).exists():
-            raise ValidationError(f"{to_user.username} is not a member of {group.name}")
+            raise ValidationError("Payer is not in the group")
+            
+        # FRAUD PREVENTION: Duplicate Transactions
+        # Prevent identical payments within 5 minutes
+        recent_cutoff = timezone.now() - timedelta(minutes=5)
+        is_duplicate = Payment.objects.filter(
+            from_user=from_user, to_user=to_user, group=group, 
+            amount=amount, status='PENDING', created_at__gte=recent_cutoff
+        ).exists()
         
-        # Calculate actual balance owed
-        actual_balance = SettlementService.calculate_balance_between_users(
-            from_user, to_user, group
-        )
+        if is_duplicate:
+            raise ValidationError("A similar payment is already pending. Please avoid duplicate clicks.")
+            
+        actual_balance = SettlementService.calculate_balance_between_users(from_user, to_user, group)
+        pending_amount = Payment.objects.filter(from_user=from_user, to_user=to_user, group=group, status='PENDING').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
-        # Check pending payments
-        pending_amount = Payment.objects.filter(
-            from_user=from_user, to_user=to_user, group=group, status='pending'
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        # Validate amount (user1 owes user2 if negative)
-        if actual_balance < 0:  # from_user owes to_user
+        if actual_balance < 0:
             max_can_settle = abs(actual_balance) - pending_amount
             if amount > max_can_settle:
-                raise ValidationError(
-                    f"{from_user.username} owes {abs(actual_balance)} "
-                    f"(with {pending_amount} pending) "
-                    f"to {to_user.username}, cannot settle {amount}"
-                )
-        else:  # from_user doesn't owe to_user (or they don't owe anything)
+                raise ValidationError(f"Cannot overpay. You only owe {abs(actual_balance)} (with {pending_amount} pending)")
+        else:
             if amount > 0:
-                raise ValidationError(
-                    f"{from_user.username} doesn't owe {to_user.username}. "
-                    f"Actually, {to_user.username} owes {actual_balance}."
-                )
+                raise ValidationError("You do not owe this user any money.")
         
-        # Create payment
         payment = Payment.objects.create(
-            from_user=from_user,
-            to_user=to_user,
-            group=group,
-            amount=amount,
-            description=description
+            from_user=from_user, to_user=to_user, group=group, 
+            amount=amount, description=description, status='PENDING'
         )
         
-        # Update trust score for payer
-        TrustScoreService.recalculate_score(from_user)
+        # NOTIFICATION: Pending payment
+        NotificationService.create_notification(
+            to_user.id, f"{from_user.username} wants to settle ${amount}. Please confirm."
+        )
         
         return payment
     
     @staticmethod
     def get_group_balances(group):
-        """
-        Get all balances in a group.
-        
-        Returns:
-            List of dicts with per-user balance information
-        """
-        balances = []
         members = group.memberships.select_related('user').all()
         
+        raw_balances = {}
+        users_info = {}
         for membership in members:
             user = membership.user
-            
-            # Calculate comprehensive net balance including settlements
             net_balance = SettlementService.calculate_user_balance(user, group)
+            raw_balances[user.id] = net_balance
+            users_info[user.id] = {
+                'id': user.id, 'username': user.username,
+                'email': user.email, 'trust_score': user.trust_score
+            }
             
+        # Generate optimal simplified transactions
+        simplified_debts = SettlementService.simplify_debts(raw_balances)
+        
+        balances = []
+        for uid, net in raw_balances.items():
             balances.append({
-                'user': {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'trust_score': user.trust_score,
-                },
-                'total_paid': Decimal('0.00'),  # Omitted for performance, frontend uses net_balance
-                'total_owes': Decimal('0.00'),
-                'net_balance': net_balance,
+                'user': users_info[uid],
+                'net_balance': net,
             })
         
-        return balances
+        return {
+            'balances': balances,
+            'simplified_debts': simplified_debts
+        }
 
 
 class TrustScoreService:
     """
-    Service for trust score calculation and management.
-    
-    Philosophy:
-    - Score reflects payment reliability based on behavior
-    - Penalize late/missing payments
-    - Reward consistent on-time payments
-    - Account for financial capacity (debt ratio)
+    Advanced Trust Score calculation using Time Decay and Weighted Penalties.
     """
-    
-    # Configuration from settings
     SETTINGS = settings.TRUST_SCORE_SETTINGS
-    
-    @staticmethod
-    def get_user_payment_metrics(user):
-        """
-        Get raw payment metrics for user.
-        
-        Returns:
-            dict: Payment history metrics
-        """
-        payments = Payment.objects.filter(from_user=user)
-        
-        on_time = 0
-        late = 0
-        days_late_total = 0
-        
-        for payment in payments:
-            # Find what expense(s) this settled
-            # (Simplified: just track payment timeliness)
-            days_since = (timezone.now() - payment.created_at).days
-            
-            # Assume debt is "late" if not paid within 7 days of expense
-            # In real system, would link payments to specific expense groups
-            if days_since > 7:
-                late += 1
-                days_late_total += days_since
-            else:
-                on_time += 1
-        
-        total_payments = on_time + late
-        avg_days_late = days_late_total / late if late > 0 else 0
-        
-        # Since payments are not linked to specific expenses, 
-        # pending amount is the sum of the user's net negative balances across all groups.
-        groups = Group.objects.filter(memberships__user=user)
-        pending_amount = Decimal('0.00')
-        for group in groups:
-            bal = SettlementService.calculate_user_balance(user, group)
-            if bal < 0:
-                pending_amount += abs(bal)
-        
-        # How long has longest overdue been pending?
-        # We find the oldest split in any group where the user owes money
-        # Simplified: just find the oldest split
-        oldest_pending = Split.objects.filter(
-            user=user,
-            expense__created_at__lt=timezone.now() - timedelta(days=7)
-        ).order_by('expense__created_at').first()
-        
-        # Check if the user actually owes money overall
-        pending_days = 0
-        if pending_amount > 0 and oldest_pending:
-            pending_days = (timezone.now() - oldest_pending.expense.created_at).days
-        
-        return {
-            'total_payments': total_payments,
-            'on_time_payments': on_time,
-            'late_payments': late,
-            'avg_days_late': avg_days_late,
-            'pending_amount': pending_amount,
-            'pending_since_days': pending_days,
-        }
     
     @staticmethod
     def recalculate_score(user):
         """
-        Recalculate trust score for a user.
-        
-        Algorithm:
-        Base: 100
-        Penalties:
-        - Late payment: -5 per occurrence
-        - Pending overdue: -2 per 7 days
-        - High debt ratio: -15 if pending > 75%
-        Bonuses:
-        - Consistency: +3 if 100% on-time last 5
-        - Early payments: +2 per 10 early payments
+        Recalculates using Time Decay (recent behavior impacts score more heavily).
         """
-        metrics = TrustScoreService.get_user_payment_metrics(user)
+        payments = Payment.objects.filter(from_user=user).order_by('-created_at')
         
-        # Base score
-        score = TrustScoreService.SETTINGS['BASE_SCORE']
+        score = TrustScoreService.SETTINGS.get('BASE_SCORE', 100)
         
-        # Late payment penalty
-        late_penalty = metrics['late_payments'] * TrustScoreService.SETTINGS['LATE_PAYMENT_PENALTY']
+        now = timezone.now()
+        late_penalty = 0
+        total_payments = payments.count()
+        on_time_payments = 0
         
-        # Pending overdue penalty
-        overdue_penalty = (metrics['pending_since_days'] // 7) * TrustScoreService.SETTINGS['OVERDUE_PENALTY_MULTIPLIER']
+        for payment in payments:
+            days_old = (now - payment.created_at).days
+            # Exponential decay: weight drops by half roughly every 30 days
+            time_weight = math.exp(-0.02 * days_old)
+            
+            # Simple assumption: if accepted after 7 days, it's late.
+            days_to_accept = 0
+            if payment.status == 'COMPLETED':
+                days_to_accept = (payment.updated_at - payment.created_at).days
+            
+            if days_to_accept > 7:
+                # Weighted penalty (recent delays hurt more)
+                late_penalty += 5 * time_weight
+            else:
+                on_time_payments += 1
+                
+        # Overdue Penalty for open balances across all groups
+        pending_penalty = 0
+        groups = Group.objects.filter(memberships__user=user)
+        for group in groups:
+            bal = SettlementService.calculate_user_balance(user, group)
+            if bal < 0:
+                # Basic check for how long they've been in debt
+                oldest_split = Split.objects.filter(user=user, expense__group=group).order_by('created_at').first()
+                if oldest_split:
+                    days_overdue = (now - oldest_split.created_at).days
+                    if days_overdue > 14:
+                        pending_penalty += (days_overdue // 7) * 2
         
-        # Bonuses
         consistency_bonus = 0
-        if metrics['total_payments'] >= 5 and metrics['on_time_payments'] == metrics['total_payments']:
-            consistency_bonus = TrustScoreService.SETTINGS['CONSISTENCY_BONUS']
+        if total_payments >= 5 and on_time_payments == total_payments:
+            consistency_bonus = 5
+            
+        final_score = max(0, min(100, int(score - late_penalty - pending_penalty + consistency_bonus)))
         
-        # Calculate final score
-        final_score = max(0, min(100, score - late_penalty - overdue_penalty + consistency_bonus))
-        
-        # Record change
         old_score = user.trust_score
-        user.trust_score = final_score
-        user.trust_score_updated_at = timezone.now()
-        user.save()
-        
-        # Audit log
-        TrustScoreAudit.objects.create(
-            user=user,
-            old_score=old_score,
-            new_score=final_score,
-            reason='recalculated',
-            metrics={
-                'breakdown': {
-                    'base': score,
-                    'late_penalty': -late_penalty,
-                    'overdue_penalty': -overdue_penalty,
-                    'consistency_bonus': consistency_bonus,
-                },
-                'payment_metrics': {
-                    'total': metrics['total_payments'],
-                    'on_time': metrics['on_time_payments'],
-                    'late': metrics['late_payments'],
-                    'avg_days_late': float(metrics['avg_days_late']),
-                },
-                'pending': {
-                    'amount': str(metrics['pending_amount']),
-                    'days_overdue': metrics['pending_since_days'],
-                }
-            }
-        )
-        
+        if old_score != final_score:
+            user.trust_score = final_score
+            user.trust_score_updated_at = now
+            user.save(update_fields=['trust_score', 'trust_score_updated_at'])
+            
+            # NOTIFICATION: Score Change
+            if final_score < old_score:
+                NotificationService.create_notification(user.id, f"Your trust score decreased to {final_score}.")
+            elif final_score > old_score:
+                NotificationService.create_notification(user.id, f"Great job! Your trust score increased to {final_score}.")
+            
         return final_score
-    
-    @staticmethod
-    def get_detailed_score(user):
-        """
-        Get detailed trust score breakdown for API response.
-        """
-        metrics = TrustScoreService.get_user_payment_metrics(user)
-        audit_history = TrustScoreAudit.objects.filter(user=user).order_by('-computed_at')[:5]
-        
-        return {
-            'user_id': user.id,
-            'username': user.username,
-            'current_score': user.trust_score,
-            'previous_score': audit_history[1].new_score if len(audit_history) > 1 else user.trust_score,
-            'score_breakdown': {
-                'base_score': TrustScoreService.SETTINGS['BASE_SCORE'],
-                'late_payment_penalty': -(metrics['late_payments'] * TrustScoreService.SETTINGS['LATE_PAYMENT_PENALTY']),
-                'pending_amount_penalty': -((metrics['pending_since_days'] // 7) * TrustScoreService.SETTINGS['OVERDUE_PENALTY_MULTIPLIER']),
-                'consistency_bonus': TrustScoreService.SETTINGS['CONSISTENCY_BONUS'] if metrics['total_payments'] >= 5 and metrics['on_time_payments'] == metrics['total_payments'] else 0,
-                'final_score': user.trust_score,
-            },
-            'metrics': metrics,
-            'last_updated': user.trust_score_updated_at,
-        }

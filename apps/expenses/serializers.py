@@ -47,6 +47,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
         model = Expense
         fields = [
             'id',
+            'transaction_id',
             'group',
             'paid_by',
             'user_id',
@@ -56,7 +57,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
             'splits',
             'created_at',
         ]
-        read_only_fields = ['id', 'paid_by', 'created_at']
+        read_only_fields = ['id', 'transaction_id', 'paid_by', 'created_at']
     
     def validate_amount(self, value):
         """Amount must be positive."""
@@ -240,6 +241,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = [
             'id',
+            'transaction_id',
             'from_user',
             'to_user',
             'to_user_id',
@@ -249,8 +251,9 @@ class PaymentSerializer(serializers.ModelSerializer):
             'description',
             'status',
             'created_at',
+            'updated_at',
         ]
-        read_only_fields = ['id', 'from_user', 'group', 'status', 'created_at']
+        read_only_fields = ['id', 'transaction_id', 'from_user', 'group', 'status', 'created_at', 'updated_at']
     
     def validate_amount(self, value):
         if value <= 0:

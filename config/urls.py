@@ -57,6 +57,10 @@ urlpatterns = [
         # Trust Score
         path('users/<int:user_id>/trust-score/', account_views.TrustScoreView.as_view(), name='trust-score'),
         path('users/<int:user_id>/balance_with/<int:other_user_id>/', expense_views.BalanceBetweenUsersView.as_view(), name='balance-between-users'),
+
+        # Dashboard and Notifications
+        path('dashboard/', expense_views.DashboardView.as_view(), name='dashboard'),
+        path('notifications/', expense_views.NotificationListView.as_view(), name='notifications'),
     ])),
 ]
 
